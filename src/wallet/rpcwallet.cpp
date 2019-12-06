@@ -3604,7 +3604,7 @@ UniValue regist(const JSONRPCRequest& request){
         throw runtime_error(
             "regist \"address\" \"name\"\n"
 
-            "\nIssue a new token. Return the txid if seccess\n"
+            "\nregister delegateAddress delegateName\n"
 
             "\nArguments:\n"
             "1. address 	         (string, required) delegate register to\n"

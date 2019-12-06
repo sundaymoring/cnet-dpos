@@ -1028,7 +1028,7 @@ public:
     /* Set the current HD master key (will reset the chain child index counters) */
     bool SetHDMasterKey(const CPubKey& key);
 
-    bool CreateCoinStake(const CKeyStore& keystore, CBlock& block, int64_t nSearchInterval, CAmount& nFees, CMutableTransaction& tx, CKey& key);
+    bool CreateCoinStake(const CKeyStore& keystore, CBlock& block, int64_t nSearchInterval, std::map<CTokenId, CAmount>& nFees, CMutableTransaction& tx, CKey& key);
     bool SelectCoinsForStaking(CAmount& nTargetValue, std::set<std::pair<const CWalletTx*,unsigned int> >& setCoinsRet, CAmount& nValueRet) const;
     void AvailableCoinsForStaking(std::vector<COutput>& vCoins) const;
     uint64_t GetStakeWeight() const;

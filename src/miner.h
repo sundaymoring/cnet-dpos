@@ -179,7 +179,7 @@ public:
     /** Construct a new block template with coinbase to scriptPubKeyIn */
     std::unique_ptr<CBlockTemplate> CreateNewBlock(const CScript& scriptPubKeyIn, MinerConsensus consensus, const void* blockInfo = NULL, bool fMineWitnessTx=true);
     std::unique_ptr<CBlockTemplate> CreateNewBlockPOS(const CScript& scriptPubKeyIn,  CAmount& nFeesIn, bool fMineWitnessTx=true);
-
+    std::map<CTokenId, CAmount>& GetFees() {return nFees;}
 private:
     // utility functions
     /** Clear the block's state and prepare for assembling a new block */

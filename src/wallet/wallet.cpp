@@ -3177,7 +3177,7 @@ bool CWallet::CreateTransaction(vector<CRecipient>& vecSend, CWalletTx& wtxNew, 
 
 bool CWallet::CreateDposTransaction(vector<CRecipient>& vecSend, CWalletTx& wtxNew, CReserveKey& reservekey, CAmount& nFeeRet,
                                 int& nChangePosInOut, std::string& strFailReason, const CCoinControl* coinControl, bool sign, tokencode code)
-{return true;/*
+{
     if (vecSend.empty())
     {
         strFailReason = _("Transaction must have at least one recipient");
@@ -3188,14 +3188,12 @@ bool CWallet::CreateDposTransaction(vector<CRecipient>& vecSend, CWalletTx& wtxN
     tokencode scriptcode = TTC_NONE;
     opcodetype opcode = static_cast<opcodetype>(vecSend[0].scriptPubKey[0]);
 
-    if (OP_DPOS == opcode){
-
-    } else if (OP_TOKEN == opcode){
-        scriptcode = GetTokenCodeFromScript(vecSend[0].scriptPubKey, &tokenDataFromScript);
+    if (OP_DPOS != opcode){
+        strFailReason = _("Transacion is not dpos type");
+        return false;
     }
 
     CAmount nValue = 0;
-    CAmount nTokenValue = 0;
     int nChangePosRequest = nChangePosInOut;
     unsigned int nSubtractFeeFromAmount = 0;
     for (const auto& recipient : vecSend)
@@ -3203,58 +3201,23 @@ bool CWallet::CreateDposTransaction(vector<CRecipient>& vecSend, CWalletTx& wtxN
         if (recipient.scriptPubKey[0] == OP_DPOS){
             continue;
         }
+        if (recipient.tokenId != TOKENID_ZERO) {
+            strFailReason = _("this is dpos tx, not token tx");
+            return false;
+        }
 
-        if (nValue < 0 || recipient.nAmount < 0 || nTokenValue <0 || recipient.nTokenAmount < 0)
+        if (nValue < 0 || recipient.nAmount < 0)
         {
             strFailReason = _("Transaction amounts must not be negative");
             return false;
         }
         nValue += recipient.nAmount;
-        nTokenValue += recipient.nTokenAmount;
 
         if (recipient.fSubtractFeeFromAmount && code == TTC_NONE)
             nSubtractFeeFromAmount++;
     }
 
-
-    if (scriptcode != code) {
-        strFailReason = _("Transaction token codes not match");
-        return false;
-    }
-
-    CTokenId tokenId;
-    if (code == TTC_SEND) {
-        tokenId = vecSend[1].tokenId;
-        CScriptTokenSendInfo scriptInfo;
-        if (!GetSendInfoFromScriptData(scriptInfo, tokenDataFromScript)){
-            strFailReason = _("bad send tx");
-            return false;
-        }
-
-        if (scriptInfo.tokenid != tokenId) {
-            strFailReason = _("different tokenid in send tx");
-            return false;
-        }
-    }
-    if (code == TTC_BURN) {
-        tokenId = vecSend[1].tokenId;
-        CScriptTokenBurnInfo scriptInfo;
-        if (!GetBurnInfoFromScriptData(scriptInfo, tokenDataFromScript)){
-            strFailReason = _("bad send tx");
-            return false;
-        }
-
-        if (scriptInfo.tokenid != tokenId) {
-            strFailReason = _("different tokenid in burn tx");
-            return false;
-        }
-//        if (scriptInfo.burnAmount != vecSend[1].nTokenAmount) {
-//            strFailReason = _("different token amount in burn tx");
-//            return false;
-//        }
-
-        vecSend.erase(vecSend.begin() + 1);
-    }
+    CTokenId tokenId = TOKENID_ZERO;
 
     wtxNew.fTimeReceivedIsTxTime = true;
     wtxNew.BindWallet(this);
@@ -3296,22 +3259,19 @@ bool CWallet::CreateDposTransaction(vector<CRecipient>& vecSend, CWalletTx& wtxN
     assert(txNew.nLockTime < LOCKTIME_THRESHOLD);
 
     {
-        set<pair<const CWalletTx*,unsigned int> > setToken;
+//        set<pair<const CWalletTx*,unsigned int> > setToken;
         set<pair<const CWalletTx*,unsigned int> > setCoins;
         LOCK2(cs_main, cs_wallet);
         {
-            std::vector<COutput> vAvailableToken;
             std::vector<COutput> vAvailableCoins;
-            AvailablePureCoins(vAvailableCoins, true, coinControl);
+//            AvailablePureCoins(vAvailableCoins, true, coinControl);
 
-            if (code == TTC_SEND || code == TTC_BURN) {
-                AvailableToken(tokenId, vAvailableToken, true, coinControl);
-            }
+//            if (code == TTC_SEND || code == TTC_BURN) {
+                AvailableToken(tokenId, vAvailableCoins, true, coinControl);
+//            }
 
             nFeeRet = 0;
-            if (code == TTC_ISSUE){
-                nFeeRet = TOKEN_ISSUE_FEE;
-            }
+
             // Start with no fee and loop until there is enough fee
             while (true)
             {
@@ -3358,36 +3318,34 @@ bool CWallet::CreateDposTransaction(vector<CRecipient>& vecSend, CWalletTx& wtxN
                 }
 
                 // Choose coins to use
-                CAmount nTokenValueIn = 0;
-                CAmount nValueFromToken = 0;
-                setToken.clear();
-                if (code == TTC_SEND  || code == TTC_BURN) {
-                    if(!SelectToken(tokenId, vAvailableToken, nTokenValue, setToken, nTokenValueIn, coinControl))
-                    {
-                        strFailReason = _("Insufficient token");
-                        return false;
-                    }
-                    for (const auto& pcoin : setToken){
-                        nValueFromToken += pcoin.first->tx->vout[pcoin.second].nValue;
-                    }
-                    if (code == TTC_SEND)
-                        txNew.vout[0].scriptPubKey = CreateSendScript(tokenId, nTokenValueIn);
-                }
-                const CAmount nTokenChange = nTokenValueIn - nTokenValue;
-                if (nTokenChange > 0) {
-                    nValueFromToken -= TOKEN_DEFAULT_VALUE; //token need a change
-                }
+//                CAmount nTokenValueIn = 0;
+//                CAmount nValueFromToken = 0;
+//                setToken.clear();
+//                if (code == TTC_SEND  || code == TTC_BURN) {
+//                    if(!SelectToken(tokenId, vAvailableToken, nTokenValue, setToken, nTokenValueIn, coinControl))
+//                    {
+//                        strFailReason = _("Insufficient token");
+//                        return false;
+//                    }
+//                    for (const auto& pcoin : setToken){
+//                        nValueFromToken += pcoin.first->tx->vout[pcoin.second].nValue;
+//                    }
+//                    if (code == TTC_SEND)
+//                        txNew.vout[0].scriptPubKey = CreateSendScript(tokenId, nTokenValueIn);
+//                }
+//                const CAmount nTokenChange = nTokenValueIn - nTokenValue;
+//                if (nTokenChange > 0) {
+//                    nValueFromToken -= TOKEN_DEFAULT_VALUE; //token need a change
+//                }
 
                 CAmount nValueIn = 0;
                 setCoins.clear();
-                if (!SelectCoins(vAvailableCoins, nValueToSelect - nValueFromToken, setCoins, nValueIn, coinControl))
+                if (!SelectToken(tokenId, vAvailableCoins, nValueToSelect, setCoins, nValueIn, coinControl))
                 {
                     strFailReason = _("Insufficient funds");
                     return false;
                 }
-                if (code == TTC_SEND || code == TTC_BURN) {
-                    setCoins.insert(setToken.begin(), setToken.end());
-                }
+
                 for (const auto& pcoin : setCoins)
                 {
                     CAmount nCredit = pcoin.first->tx->vout[pcoin.second].nValue;
@@ -3401,38 +3359,8 @@ bool CWallet::CreateDposTransaction(vector<CRecipient>& vecSend, CWalletTx& wtxN
                         age += 1;
                     dPriority += (double)nCredit * age;
                 }
-                if (nTokenChange > 0) {
-                    CPubKey vchPubKey;
-                    bool ret;
-                    ret = reservekey.GetReservedKey(vchPubKey);
-                    if (!ret)
-                    {
-                        strFailReason = _("Keypool ran out, please call keypoolrefill first");
-                        return false;
-                    }
-                    CScript scriptChange = GetScriptForDestination(vchPubKey.GetID());
-                    CTxOut newTxOut(TOKEN_DEFAULT_VALUE, scriptChange, tokenId, nTokenChange);
 
-                    if (nChangePosInOut == -1)
-                    {
-                        // Insert change txn at random position:
-                        nChangePosInOut = 1 + GetRandInt(txNew.vout.size());
-                    }
-                    else if ((unsigned int)nChangePosInOut > txNew.vout.size())
-                    {
-                        strFailReason = _("Change index out of range");
-                        return false;
-                    }
-
-                    vector<CTxOut>::iterator position = txNew.vout.begin()+nChangePosInOut;
-                    txNew.vout.insert(position, newTxOut);
-                    if (nChangePosRequest == -1) {
-                        nChangePosInOut = -1;
-                    }else{
-                        nChangePosInOut++;
-                    }
-                }
-                const CAmount nChange = nValueIn + nValueFromToken - nValueToSelect;
+                const CAmount nChange = nValueIn - nValueToSelect;
                 if (nChange > 0)
                 {
                     // Fill a vout to ourself
@@ -3467,7 +3395,7 @@ bool CWallet::CreateDposTransaction(vector<CRecipient>& vecSend, CWalletTx& wtxN
                         scriptChange = GetScriptForDestination(vchPubKey.GetID());
                     }
 
-                    CTxOut newTxOut(nChange, scriptChange);
+                    CTxOut newTxOut(nChange, scriptChange, TOKENID_ZERO);
 
                     // We do not move dust-change to fees, because the sender would end up paying more than requested.
                     // This would be against the purpose of the all-inclusive feature.
@@ -3543,19 +3471,6 @@ bool CWallet::CreateDposTransaction(vector<CRecipient>& vecSend, CWalletTx& wtxN
                 if (!DummySignTx(txNew, setCoins)) {
                     strFailReason = _("Signing transaction failed");
                     return false;
-                }
-
-                if (code == TTC_ISSUE)
-                {
-                    txNew.vout[1].tokenId = CTokenId( txNew.vin[0].prevout.hash, txNew.vin[0].prevout.n );  //just use first vin
-
-                    CScriptTokenIssueInfo scriptInfo;
-                    if (!GetIssueInfoFromScriptData(scriptInfo, tokenDataFromScript))
-                    {
-                        strFailReason = _("bad asset script in issue tx");
-                        return false;
-                    }
-                    txNew.vout[0].scriptPubKey = AppendIssuanceScript(scriptInfo, txNew.vout[1].tokenId);
                 }
 
                 unsigned int nBytes = GetVirtualTransactionSize(txNew);
@@ -3645,7 +3560,7 @@ bool CWallet::CreateDposTransaction(vector<CRecipient>& vecSend, CWalletTx& wtxN
                 const CScript& scriptPubKey = coin.first->tx->vout[coin.second].scriptPubKey;
                 SignatureData sigdata;
 
-                if (!ProduceSignature(TransactionSignatureCreator(this, &txNewConst, nIn, coin.first->tx->vout[coin.second].nValue, coin.first->tx->vout[coin.second].tokenId, coin.first->tx->vout[coin.second].nTokenValue, SIGHASH_ALL), scriptPubKey, sigdata))
+                if (!ProduceSignature(TransactionSignatureCreator(this, &txNewConst, nIn, coin.first->tx->vout[coin.second].nValue, coin.first->tx->vout[coin.second].tokenId, SIGHASH_ALL), scriptPubKey, sigdata))
                 {
                     strFailReason = _("Signing transaction failed");
                     return false;
@@ -3682,7 +3597,7 @@ bool CWallet::CreateDposTransaction(vector<CRecipient>& vecSend, CWalletTx& wtxN
             strFailReason = _("Transaction has too long of a mempool chain");
             return false;
         }
-    }*/
+    }
     return true;
 }
 
@@ -5003,7 +4918,7 @@ bool CheckKernel(CBlockIndex* pindexPrev, unsigned int nBits, int64_t nTime, con
     return CheckStakeKernelHash( pindexPrev, nBits, CCoins(txPrev, pindexPrev->nHeight), prevout, nTime);
 }
 
-bool CWallet::CreateCoinStake(const CKeyStore& keystore, CBlock& block, int64_t nSearchInterval, CAmount& nFees, CMutableTransaction& tx, CKey& key){
+bool CWallet::CreateCoinStake(const CKeyStore& keystore, CBlock& block, int64_t nSearchInterval, std::map<CTokenId, CAmount>& nFees, CMutableTransaction& tx, CKey& key){
     CBlockIndex* pindexPrev = pindexBestHeader;
     arith_uint256 bnTargetPerCoinDay;
     bnTargetPerCoinDay.SetCompact(block.nBits);
@@ -5147,7 +5062,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, CBlock& block, int64_t 
     if (nReward < 0)
         return false;
 
-    nCredit = nCredit + nReward + nFees;
+    nCredit = nCredit + nReward;
 
     if (nCredit >= GetStakeSplitThreshold())
         txNew.vout.emplace_back(CTxOut(0, txNew.vout[1].scriptPubKey)); //split stake
@@ -5160,6 +5075,15 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, CBlock& block, int64_t 
     }
     else
         txNew.vout[1].nValue = nCredit;
+
+    // for fee add output
+    for (auto one : nFees) {
+        if (one.first == TOKENID_ZERO) {
+            txNew.vout[1].nValue += one.second;
+        } else {
+            txNew.vout.push_back(CTxOut(one.second, txNew.vout[1].scriptPubKey, one.first));
+        }
+    }
 
     // Sign
     int nIn = 0;

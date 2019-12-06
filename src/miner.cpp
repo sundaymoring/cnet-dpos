@@ -1002,7 +1002,7 @@ void GenerateBitcoins(bool fGenerate, int nThreads, const CChainParams& chainpar
 
 //#ifdef ENABLE_WALLET
 // novacoin: attempt to generate suitable proof-of-stake
-bool SignBlock(CBlock& block, CWallet& wallet, int64_t& nFees){
+bool SignBlock(CBlock& block, CWallet& wallet, std::map<CTokenId, CAmount>& nFees){
     // if we are trying to sign
     //    something except proof-of-stake block template
     if (!block.vtx[0]->vout[0].IsEmpty()){
@@ -1124,7 +1124,8 @@ void static StakeMiner(CWallet *pwallet, const CChainParams& chainparams){
             //
             // Create new block
             //
-            std::unique_ptr<CBlockTemplate> pblocktemplate(BlockAssembler(Params()).CreateNewBlock(coinbaseScript->reserveScript, Miner_POS, NULL));
+            BlockAssembler blockAssembler(Params());
+            std::unique_ptr<CBlockTemplate> pblocktemplate(blockAssembler.CreateNewBlock(coinbaseScript->reserveScript, Miner_POS, NULL));
             if (!pblocktemplate.get())
             {
                 LogPrintf("Error in CurrNetMiner: Keypool ran out, please call keypoolrefill before restarting the mining thread\n");
@@ -1132,8 +1133,8 @@ void static StakeMiner(CWallet *pwallet, const CChainParams& chainparams){
             }
 
             CBlock *pblock = &pblocktemplate->block;
-            CAmount nFees = pblocktemplate->vTxFees[0] * -1;
-            if (SignBlock(*pblock, *pwallet, nFees)){
+//            std::map<CTokenId,CAmount> nFees = pblocktemplate->vTxFees[0] * -1;
+            if (SignBlock(*pblock, *pwallet, blockAssembler.GetFees())){
                 SetThreadPriority(THREAD_PRIORITY_NORMAL);
                 CheckStake(pblock, *pwallet, chainparams);
                 SetThreadPriority(THREAD_PRIORITY_LOWEST);
